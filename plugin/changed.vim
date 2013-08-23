@@ -36,10 +36,11 @@
 
 command!  Changed       :call <SID>Changed_execute()
 command!  ChangedClear  :call <SID>Changed_clear()
-let g:Changed_Auto = 0
+let g:Changed_Auto = 1
 if (g:Changed_Auto)
 	au! BufWritePost * Changed
-	au! CursorHold   * Changed
+	au! InsertLeave  * Changed
+	au! TextChanged  * Changed
 endif
 "au! CursorHoldI  * call <SID>Changed_execute()
 " heavy
