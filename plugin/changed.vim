@@ -69,91 +69,94 @@ function! s:Changed_clear()
 endfunction
 
 function! s:Changed_execute()
-    if exists('b:Changed__tick') && b:Changed__tick == b:changedtick | return | endif
-
-    call s:Changed_clear()
-
-    if ! &modified | return | endif
-
-    " get paths
-    let originalPath = substitute(expand('%:p'), '\', '/', 'g')
-    let changedPath = substitute(tempname(), '\', '/', 'g')
-    "echom 'originalPath' . originalPath
-    "echom 'changedPath' . changedPath
-
-    " both files are not saved -> don't diff
-    if ! filereadable(originalPath) | return | endif
-
-    " change encodings of paths (enc -> tenc)
-    if exists('&tenc')
-        let tenc = &tenc
-    else
-        let tenc = ''
-    endif
-    if strlen(tenc) == 0 | let tenc = &enc | endif
-
-    " get diff text
-    silent execute 'write! ' . escape(changedPath, ' ')
-    "echom 'diff -u "' . originalPath . '" "' . changedPath . '"'
-    let diffText = vimproc#system(iconv('diff -u "' . originalPath . '" "' . changedPath . '"', &enc, tenc))
-    let diffLines = split(diffText, '\n')
-
-    " clear all temp files
-    if has("win32") || has("win64")
-	    call vimproc#delete_trash(substitute(changedPath, '/', '\', 'g'))
-    else
-    "vimproc can't find del comman!
-	    call vimproc#system_bg(iconv('rm "' . changedPath . '"', &enc, tenc))
-    endif
-
-    " list lines and their signs
-    let pos = 1 " changed line number
-    let changedLineNums = [] " collection of pos
-    let minusLevel = 0
-    for line in diffLines
-        "echom 'line: ' . line
-        if line[0] == '@'
-            " reset pos
-            let regexp = '@@\s*-\d\+\(,\d\+\)\?\s\++\(\d\+\),\d\+\s\+@@'
-            let pos = eval(substitute(line, regexp, '\2', ''))
-            let minusLevel = 0
-        elseif line[0] == '-' && line !~ '^---'
-            call add(changedLineNums, [pos, '-'])
-            let minusLevel += 1
-        elseif line[0] == '+' && line !~ '^+++'
-            if minusLevel > 0
-                call add(changedLineNums, [pos, '*'])
+    try
+        if exists('b:Changed__tick') && b:Changed__tick == b:changedtick | return | endif
+    
+        call s:Changed_clear()
+    
+        if ! &modified | return | endif
+    
+        " get paths
+        let originalPath = substitute(expand('%:p'), '\', '/', 'g')
+        let changedPath = substitute(tempname(), '\', '/', 'g')
+        "echom 'originalPath' . originalPath
+        "echom 'changedPath' . changedPath
+    
+        " both files are not saved -> don't diff
+        if ! filereadable(originalPath) | return | endif
+    
+        " change encodings of paths (enc -> tenc)
+        if exists('&tenc')
+            let tenc = &tenc
+        else
+            let tenc = ''
+        endif
+        if strlen(tenc) == 0 | let tenc = &enc | endif
+    
+        " get diff text
+        silent execute 'write! ' . escape(changedPath, ' ')
+        "echom 'diff -u "' . originalPath . '" "' . changedPath . '"'
+        let diffText = vimproc#system(iconv('diff -u "' . originalPath . '" "' . changedPath . '"', &enc, tenc))
+        let diffLines = split(diffText, '\n')
+    
+        " clear all temp files
+        if has("win32") || has("win64")
+    	    call vimproc#delete_trash(substitute(changedPath, '/', '\', 'g'))
+        else
+        "vimproc can't find del comman!
+    	    call vimproc#system_bg(iconv('rm "' . changedPath . '"', &enc, tenc))
+        endif
+    
+        " list lines and their signs
+        let pos = 1 " changed line number
+        let changedLineNums = [] " collection of pos
+        let minusLevel = 0
+        for line in diffLines
+            "echom 'line: ' . line
+            if line[0] == '@'
+                " reset pos
+                let regexp = '@@\s*-\d\+\(,\d\+\)\?\s\++\(\d\+\),\d\+\s\+@@'
+                let pos = eval(substitute(line, regexp, '\2', ''))
+                let minusLevel = 0
+            elseif line[0] == '-' && line !~ '^---'
+                call add(changedLineNums, [pos, '-'])
+                let minusLevel += 1
+            elseif line[0] == '+' && line !~ '^+++'
+                if minusLevel > 0
+                    call add(changedLineNums, [pos, '*'])
+                else
+                    call add(changedLineNums, [pos, '+'])
+                endif
+                let pos += 1
+                let minusLevel -= 1
             else
-                call add(changedLineNums, [pos, '+'])
+                let pos += 1
+                let minusLevel = 0
             endif
-            let pos += 1
-            let minusLevel -= 1
-        else
-            let pos += 1
-            let minusLevel = 0
-        endif
-    endfor
-    "echom 'changedLineNums: ' . join(changedLineNums, ', ')
-
-    " place signs
-    let lastLineNum = line('$')
-    for c in changedLineNums
-        let lineNum = c[0]
-        if lastLineNum < lineNum
-            let lineNum = lastLineNum
-        endif
-        if c[1] == '-' 
-            execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_DELETED_VIM buffer=' . bufnr('%')
-        elseif c[1] == '+'
-            execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_ADDED_VIM buffer=' . bufnr('%')
-        else
-            execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_VIM buffer=' . bufnr('%')
-        endif
-    endfor
-
-    " memorize the signs list for clearing saved signs
-    let b:Changed__lineNums = changedLineNums
-    let b:Changed__tick = b:changedtick
-    "echom 'bufnr: ' . bufnr('%')
-    "echom 'changedtick: ' . b:changedtick
+        endfor
+        "echom 'changedLineNums: ' . join(changedLineNums, ', ')
+    
+        " place signs
+        let lastLineNum = line('$')
+        for c in changedLineNums
+            let lineNum = c[0]
+            if lastLineNum < lineNum
+                let lineNum = lastLineNum
+            endif
+            if c[1] == '-' 
+                execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_DELETED_VIM buffer=' . bufnr('%')
+            elseif c[1] == '+'
+                execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_ADDED_VIM buffer=' . bufnr('%')
+            else
+                execute 'sign place ' . c[0] . ' line=' . lineNum . ' name=SIGN_CHANGED_VIM buffer=' . bufnr('%')
+            endif
+        endfor
+    
+        " memorize the signs list for clearing saved signs
+        let b:Changed__lineNums = changedLineNums
+        let b:Changed__tick = b:changedtick
+        "echom 'bufnr: ' . bufnr('%')
+        "echom 'changedtick: ' . b:changedtick
+    catch
+    endtry
 endfunction
