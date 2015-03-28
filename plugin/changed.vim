@@ -33,20 +33,44 @@
 "   Edit a buffer and wait seconds or execute :Changed.
 "   Then signs appear on changed lines.
 "
+let s:save_cpo = &cpo
+set cpo&vim
 
 command!  Changed       :call <SID>Changed_execute()
 command!  ChangedClear  :call <SID>Changed_clear()
-let g:Changed_Auto = 1
-if (g:Changed_Auto)
-	au! BufWritePost * Changed
-	au! TextChangedI  * Changed
-	au! TextChanged  * Changed
-endif
+
+let g:changed_auto = 1
+let g:changed_constant = 1
+
+augroup my_changed
+    autocmd!
+    au BufWritePost * call s:Auto_changed()
+    au TextChangedI  * call s:Auto_changed()
+    au TextChanged  * call s:Auto_changed()
+    au BufRead * call s:Show_default_sign()
+augroup END
+
 "au! CursorHoldI  * call <SID>Changed_execute()
 " heavy
 "au! InsertLeave * call <SID>Changed_execute()
 " too heavy
 "au! CursorMoved * call <SID>Changed_execute()
+
+function! s:Auto_changed()
+    if !g:changed_auto
+	return 
+    endif
+    call s:Changed_execute()
+endfunction
+
+function! s:Show_default_sign()
+    if !g:changed_constant
+	return 
+    endif
+    if filereadable(expand("%:p"))
+        execute "sign place 134893619283 line=1 name=SIGN_DEFAULT buffer=" . bufnr('%')
+    endif
+endfunction
 
 if !exists('g:Changed_definedSigns')
     let g:Changed_definedSigns = 1
@@ -54,6 +78,7 @@ if !exists('g:Changed_definedSigns')
     sign define SIGN_CHANGED_DELETED_VIM text=- texthl=ChangedDefaultHl
     sign define SIGN_CHANGED_ADDED_VIM 	 text=+ texthl=ChangedDefaultHl
     sign define SIGN_CHANGED_VIM 		 text=* texthl=ChangedDefaultHl
+    sign define SIGN_DEFAULT text=\
 endif
 
 
@@ -160,3 +185,6 @@ function! s:Changed_execute()
     catch
     endtry
 endfunction
+
+let &cpo = s:save_cpo
+unlet s:save_cpo
